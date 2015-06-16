@@ -31,6 +31,10 @@ class UTTTGame(PygameGame):
         self.font = pygame.font.SysFont("Courier New", 14)
         self.data = data
         self.send_queue = send_queue
+        
+        self.blink_dir   = 1
+        self.blink_value = 0
+        self.blink_max   = frames_per_second
         return
 
     def handle_state(self):
@@ -119,8 +123,12 @@ class UTTTGame(PygameGame):
         if self.data.GetBoardOwner(board) == uttt_data.PLAYER_N:
             if (self.data.GetNextPlayer() == self.data.GetPlayer() and
                 (self.data.GetNextBoard() == uttt_data.BOARD_ANY or self.data.GetNextBoard() == board)):
+                blink_percent = float(self.blink_value)/self.blink_max
+                background_color = []
+                for i in range(3):
+                    background_color.append(int(blink_percent*(very_light_background[i] - very_dark_background[i])) + very_dark_background[i])
+
                 # light background where I can play, if it's my turn
-                background_color = light_background
                 line_color = very_dark_background
                 player_x_color = normal_player_x
                 player_o_color = normal_player_o
@@ -207,6 +215,15 @@ class UTTTGame(PygameGame):
         return
         
     def paint(self, surface):
+        # Blink control
+        self.blink_value += self.blink_dir
+        if self.blink_value >= self.blink_max:
+            self.blink_value = self.blink_max
+            self.blink_dir = -1
+        elif self.blink_value <= 0:
+            self.blink_value = 0
+            self.blink_dir = 1
+
         # Background
         rect = pygame.Rect(0,0,self.width,self.height)
         surface.fill((0,0,0), rect)

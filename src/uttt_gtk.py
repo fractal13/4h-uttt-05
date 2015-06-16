@@ -379,7 +379,7 @@ class TTTGUI:
     # This method is called by the 'signup fail' button
     def signup_fail_handler(self, widget, data=None):
         if self.data:
-            self.data.ShowSignup()
+            self.data.ShowSignUp()
         self.notebook.set_current_page(1)
         return
 
