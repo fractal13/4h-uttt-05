@@ -3,11 +3,32 @@ from pygame_game import PygameGame
 import pygame, pygame.locals
 import uttt_data
 
+# colors
+very_light_background = (231, 154, 175)
+light_background = (193, 96, 122)
+normal_background = (154, 51, 79)
+dark_background = (116, 19, 45)
+very_dark_background = (77, 0, 21)
+
+very_light_player_x = (115, 172, 150)
+light_player_x = (72, 144, 117)
+normal_player_x = (38, 115, 86)
+dark_player_x = (14, 86, 59)
+very_dark_player_x = (0, 57, 35)
+
+very_light_player_o = (229, 245, 164)
+light_player_o = (185, 204, 102)
+normal_player_o = (142, 163, 54)
+dark_player_o = (103, 123, 20)
+very_dark_player_o = (66, 82, 0)
+
 class UTTTGame(PygameGame):
 
     def __init__(self, width_px, height_px, frames_per_second, data, send_queue):
         # PygameGame sets self.width and self.height        
         PygameGame.__init__(self, "Ultimate Tic Tac Toe", width_px, height_px, frames_per_second)
+        pygame.font.init()
+        self.font = pygame.font.SysFont("Courier New", 14)
         self.data = data
         self.send_queue = send_queue
         return
@@ -75,6 +96,10 @@ class UTTTGame(PygameGame):
             row = mY / (self.height/9)
             board = 3 * (row / 3) + (col / 3)
             position = 3 * (row % 3) + (col % 3)
+
+            if self.data.GetNextBoard() != board and self.data.GetNextBoard() != uttt_data.BOARD_ANY:
+                # not correct place
+                return
             
             if self.data and self.send_queue:
                 text = self.data.SendTurn(board, position)
@@ -82,36 +107,144 @@ class UTTTGame(PygameGame):
                 self.send_queue.put(text)
         return
 
+    def paint_board(self, surface, board):
+        # size and coordinates of the board
+        w0 = self.width/3
+        h0 = self.height/3
+        x0 = (board % 3) * w0
+        y0 = (board / 3) * h0
+        
+        # background/line/piece color
+        outline_color = very_light_background
+        if self.data.GetBoardOwner(board) == uttt_data.PLAYER_N:
+            if (self.data.GetNextPlayer() == self.data.GetPlayer() and
+                (self.data.GetNextBoard() == uttt_data.BOARD_ANY or self.data.GetNextBoard() == board)):
+                # light background where I can play, if it's my turn
+                background_color = light_background
+                line_color = very_dark_background
+                player_x_color = normal_player_x
+                player_o_color = normal_player_o
+            else:
+                # normal background where I can't play
+                background_color = normal_background
+                line_color = very_dark_background
+                player_x_color = normal_player_x
+                player_o_color = normal_player_o
+        elif self.data.GetBoardOwner(board) == uttt_data.PLAYER_X:
+            background_color = light_player_x
+            line_color = very_dark_player_x
+            player_x_color = dark_player_x
+            player_o_color = very_light_player_o
+        elif self.data.GetBoardOwner(board) == uttt_data.PLAYER_O:
+            background_color = light_player_o
+            line_color = very_dark_player_o
+            player_x_color = very_light_player_x
+            player_o_color = dark_player_o
+        else:
+            # error
+            background_color = (0, 0, 0)
+            line_color = (255, 255, 255)
+            player_x_color = normal_player_x
+            player_o_color = normal_player_o
+
+        
+        # outline
+        rect = pygame.Rect(x0, y0, w0, h0)
+        surface.fill(outline_color, rect)
+        
+        # background
+        rect = pygame.Rect(x0+2, y0+2, w0-4, h0-4)
+        surface.fill(background_color, rect)
+        
+        # lines
+        for i in range(1,3):
+            x  = x0 + (i * w0/3)
+            y1 = y0
+            y2 = y0 + h0
+            pygame.draw.line(surface, line_color, (x, y1), (x, y2))
+            
+            x1 = x0
+            x2 = x0 + w0
+            y  = y0 + (i * h0/3)
+            pygame.draw.line(surface, line_color, (x1, y), (x2, y))
+
+        # markers
+        for position in range(9):
+            col = position % 3
+            row = position / 3
+            x = x0 + int((col + .5) * w0/3)
+            y = y0 + int((row + .5) * h0/3)
+            marker = self.data.GetMarker(board, position)
+            if marker == uttt_data.PLAYER_X:
+                pygame.draw.circle(surface, player_x_color, (x, y), 5)
+            elif marker == uttt_data.PLAYER_O:
+                pygame.draw.circle(surface, player_o_color, (x, y), 5)
+            
+        return
+
+    def paint_game_info(self, surface):
+        my_turn = self.data.GetPlayer() == self.data.GetNextPlayer()
+        player = self.data.GetPlayer()
+        if player == uttt_data.PLAYER_X:
+            opponent = uttt_data.PLAYER_O
+            if my_turn:
+                player_color = very_light_player_x
+                opponent_color = normal_player_o
+            else:
+                player_color = normal_player_x
+                opponent_color = very_light_player_o
+        else:
+            opponent = uttt_data.PLAYER_X
+            if my_turn:
+                player_color = very_light_player_o
+                opponent_color = normal_player_x
+            else:
+                player_color = normal_player_o
+                opponent_color = very_light_player_x
+        
+        self.drawTextLeft(surface, player + " " + self.data.GetPlayerName(), 30, 30, self.font, player_color)
+        self.drawTextLeft(surface, opponent + " " + self.data.GetOpponentName(), 30, 50, self.font, opponent_color)
+        return
+        
     def paint(self, surface):
         # Background
         rect = pygame.Rect(0,0,self.width,self.height)
-        surface.fill((0,0,0),rect )
+        surface.fill((0,0,0), rect)
         
-        # Regular Lines
-        for i in range(1,9):
-            pygame.draw.line(surface, (255,255,255), (0, i*self.height/9), (self.width, i*self.height/9))
-        for j in range(1,9):
-            pygame.draw.line(surface, (255,255,255), (j*self.width/9, 0), (j*self.height/9, self.height))
-
-        # Board Lines
-        for k in range(1,3):
-            pygame.draw.line(surface, (255,255,0), (0, k*self.height/3), (self.width, k*self.height/3), 3)
-        for l in range(1,3):
-            pygame.draw.line(surface, (255,255,0), (l*self.width/3, 0), (l*self.height/3, self.height), 3)
-
-        # Markers
         for board in range(9):
-            for position in range(9):
-                col = 3 * (board % 3) + position % 3
-                row = 3 * (board / 3) + position / 3
-                x = int((col + .5) * self.width / 9)
-                y = int((row + .5) * self.height / 9)
-                marker = self.data.GetMarker(board, position)
-                if marker == uttt_data.PLAYER_X:
-                    pygame.draw.circle(surface, (0,0,255), (x, y), 5)
-                elif marker == uttt_data.PLAYER_O:
-                    pygame.draw.circle(surface, (255,0,0), (x, y), 5)
+            self.paint_board(surface, board)
+
+        self.paint_game_info(surface)
+        
         return
+
+    # Draws text left justified at "x".
+    # The bottom of the text is displayed at "y".
+    def drawTextLeft(self, surface, text, x, y, font, color):
+        text_object  = font.render(text, False, color)
+        text_rect    = text_object.get_rect()
+        text_rect.bottomleft = (x, y)
+        surface.blit(text_object, text_rect)
+        return text_rect
+    
+    # Draws text right justified at "x".
+    # The bottom of the text is displayed at "y".
+    def drawTextRight(self, surface, text, x, y, font, color):
+        text_object = font.render(text, False, color)
+        text_rect = text_object.get_rect()
+        text_rect.bottomright = (x, y)
+        surface.blit(text_object, text_rect)
+        return
+        
+    # Draws text centered at "x".
+    # The middle of the text is displayed at "y".
+    def drawTextCenter(self, surface, text, x, y, font, color):
+        text_object = font.render(text, False, color)
+        text_rect = text_object.get_rect()
+        text_rect.center = (x, y)
+        surface.blit(text_object, text_rect)
+        return
+
 
 def uttt_pygame_main(data, send_queue):
     game = UTTTGame(600, 600, 30, data, send_queue)

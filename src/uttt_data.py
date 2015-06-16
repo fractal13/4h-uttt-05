@@ -290,5 +290,6 @@ class UTTTData:
             print "Received OpponentName"
         else:
             print "Unknown Message Type:", typeName, str(msg)
-            
+
+        self.Display()
         return retmsg
