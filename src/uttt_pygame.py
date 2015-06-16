@@ -126,7 +126,7 @@ class UTTTGame(PygameGame):
                 blink_percent = float(self.blink_value)/self.blink_max
                 background_color = []
                 for i in range(3):
-                    background_color.append(int(blink_percent*(very_light_background[i] - very_dark_background[i])) + very_dark_background[i])
+                    background_color.append(int(blink_percent*(very_light_background[i] - normal_background[i])) + normal_background[i])
 
                 # light background where I can play, if it's my turn
                 line_color = very_dark_background
