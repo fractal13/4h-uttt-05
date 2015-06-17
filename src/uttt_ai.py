@@ -67,6 +67,11 @@ class Board:
         POSITION_EDGE_SCORE = 3
         POSITION_SCORES = [ POSITION_CORNER_SCORE, POSITION_CENTER_SCORE, POSITION_EDGE_SCORE ]
         score = 0
+        if self.winner != uttt_data.PLAYER_N:
+            if self.winner == self.this_player:
+                score += 100000
+            elif self.winner == self.other_player:
+                score -= 100000
         for board in range(9):
             if self.board_owners[board] == self.this_player:
                 score += self.PositionScore(board, BOARD_SCORES)
@@ -116,37 +121,47 @@ class UTTTAI:
 
     def ChooseMove(self, depth):
         board = Board(self.data)
-        (move, value) = self.Max(board, depth)
+        alpha = -2000000
+        beta = 2000000
+        (move, value) = self.Max(board, depth, alpha, beta)
         return move
 
-    def Max(self, board, depth):
-        if depth <= 0:
+    def Max(self, board, depth, alpha, beta):
+        if depth <= 0 or board.winner != uttt_data.PLAYER_N:
             return (None, board.Evaluate())
         max_value = -1000000
         max_move = None
         moves = board.LegalMoves()
         for m in moves:
             undo_info = board.MakeMove(m)
-            (junk, value) = self.Min(board, depth-1)
+            (junk, value) = self.Min(board, depth-1, alpha, beta)
             board.UndoMove(undo_info)
             if value > max_value:
                 max_value = value
                 max_move = m
+            if value > alpha:
+                alpha = value
+            if alpha >= beta:
+                break
         return (max_move, max_value)
 
-    def Min(self, board, depth):
-        if depth <= 0:
+    def Min(self, board, depth, alpha, beta):
+        if depth <= 0 or board.winner != uttt_data.PLAYER_N:
             return (None, board.Evaluate())
         min_value = 1000000
         min_move = None
         moves = board.LegalMoves()
         for m in moves:
             undo_info = board.MakeMove(m)
-            (junk, value) = self.Max(board, depth-1)
+            (junk, value) = self.Max(board, depth-1, alpha, beta)
             board.UndoMove(undo_info)
             if value < min_value:
                 min_value = value
                 min_move = m
+            if value < beta:
+                beta = value
+            if alpha >= beta:
+                break
         return (min_move, min_value)
             
             

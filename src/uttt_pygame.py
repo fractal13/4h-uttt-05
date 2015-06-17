@@ -74,6 +74,8 @@ class UTTTGame(PygameGame):
         self.o_image_multiplier = 3
 
         self.search_depth = 3
+
+        self.game_over = False
         return
 
     def handle_state(self):
@@ -99,8 +101,7 @@ class UTTTGame(PygameGame):
                         pygame.RESIZABLE)
                 
             elif state in [ uttt_data.STATE_WAIT_GAME, uttt_data.STATE_SHOW_GAME,
-                            uttt_data.STATE_GAME_OVER, uttt_data.STATE_TURN_FAILED,
-                            uttt_data.STATE_WAIT_TURN ]:
+                            uttt_data.STATE_TURN_FAILED, uttt_data.STATE_WAIT_TURN ]:
                 # unminimize window
                 if self.screen.get_size() != ( self.width, self.height ):
                     print "WHAT?  pygame doesn't support unminimize?"
@@ -114,10 +115,11 @@ class UTTTGame(PygameGame):
                         # allow resizing
                         pygame.RESIZABLE)
             elif state in [ uttt_data.STATE_SOCKET_CLOSED, uttt_data.STATE_SOCKET_ERROR,
-                            uttt_data.STATE_ERROR ]:
+                            uttt_data.STATE_ERROR, uttt_data.STATE_GAME_OVER ]:
                 # close
-                print "Socket closed, or other error, pygame will quit."
-                pygame.quit()
+                self.game_over = True
+                #print "Socket closed, or other error, pygame will quit."
+                #pygame.quit()
             elif state in [ uttt_data.STATE_SOCKET_OPEN ]:
                 # what should I do?
                 pass
@@ -160,6 +162,9 @@ class UTTTGame(PygameGame):
         self.o_image_i += 1
         if self.o_image_i >= len(self.o_images) * self.o_image_multiplier:
             self.o_image_i = 0
+
+        if self.game_over:
+            return True
 
         if pygame.K_UP in newkeys:
             self.search_depth += 1
@@ -336,7 +341,19 @@ class UTTTGame(PygameGame):
 
         self.drawTextLeft(surface, player + " " + self.data.GetPlayerName() + player_extra, 30, 45, self.font, player_color)
         self.drawTextLeft(surface, opponent + " " + self.data.GetOpponentName() + opponent_extra, 30, 75, self.font, opponent_color)
-        self.drawTextRight(surface, "Search depth: " + str(self.search_depth), self.width-30, 45, self.font, player_color)
+        if self.game_over:
+            winner = self.data.GetWinner()
+            if winner == player:
+                winner_str = self.data.GetPlayerName() + " wins!"
+            elif winner == opponent:
+                winner_str = self.data.GetOpponentName() + " wins!"
+            elif winner == uttt_data.PLAYER_TIE:
+                winner_str = "Cat wins."
+            else:
+                winner_str = "Shouldn't get this message."
+            self.drawTextRight(surface, winner_str, self.width-30, 45, self.font, player_color)
+        else:
+            self.drawTextRight(surface, "Search depth: " + str(self.search_depth), self.width-30, 45, self.font, player_color)
         return
         
     def paint(self, surface):
