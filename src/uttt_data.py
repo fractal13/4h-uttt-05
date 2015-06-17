@@ -162,6 +162,7 @@ class UTTTData:
         if player in LEGAL_BOARD_OWNERS:
             self.winner = player
             self.state = STATE_GAME_OVER
+            self.Display()
             return True
         return False
 

@@ -3,6 +3,7 @@ from pygame_game import PygameGame
 import pygame, pygame.locals
 import uttt_data
 import random
+import uttt_ai
 
 # colors
 very_light_background = (231, 154, 175)
@@ -71,6 +72,8 @@ class UTTTGame(PygameGame):
             self.o_images.append( pygame.image.load("OPiece%d.png" % (i,)) )
         self.o_image_i = 0
         self.o_image_multiplier = 3
+
+        self.search_depth = 3
         return
 
     def handle_state(self):
@@ -157,7 +160,37 @@ class UTTTGame(PygameGame):
         self.o_image_i += 1
         if self.o_image_i >= len(self.o_images) * self.o_image_multiplier:
             self.o_image_i = 0
-        
+
+        if pygame.K_UP in newkeys:
+            self.search_depth += 1
+        elif pygame.K_DOWN in newkeys:
+            self.search_depth -= 1
+            if self.search_depth < 1:
+                self.search_depth = 1
+            
+        if pygame.K_a in newkeys:
+            if self.data.GetNextPlayer() != self.data.GetPlayer():
+                # not our turn
+                return
+            
+            ai = uttt_ai.UTTTAI(self.data)
+            move = ai.ChooseMove(self.search_depth)
+            board, position = move
+            
+            if self.data.GetNextBoard() != board and self.data.GetNextBoard() != uttt_data.BOARD_ANY:
+                # not correct board
+                return
+
+            if self.data.GetMarker(board, position) != uttt_data.PLAYER_N:
+                # empty position
+                return
+
+            if self.data and self.send_queue:
+                text = self.data.SendTurn(board, position)
+                print "pygame: queuing: %s" % (text, )
+                self.send_queue.put(text)
+                return
+            
         if 1 in newbuttons:
             if self.data.GetNextPlayer() != self.data.GetPlayer():
                 # not our turn
@@ -303,6 +336,7 @@ class UTTTGame(PygameGame):
 
         self.drawTextLeft(surface, player + " " + self.data.GetPlayerName() + player_extra, 30, 45, self.font, player_color)
         self.drawTextLeft(surface, opponent + " " + self.data.GetOpponentName() + opponent_extra, 30, 75, self.font, opponent_color)
+        self.drawTextRight(surface, "Search depth: " + str(self.search_depth), self.width-30, 45, self.font, player_color)
         return
         
     def paint(self, surface):
@@ -364,7 +398,7 @@ if __name__ == "__main__":
     data.SetState(uttt_data.STATE_SHOW_GAME)
     data.SetBoardMarker(6, 8, uttt_data.PLAYER_X)
     data.SetBoardMarker(8, 2, uttt_data.PLAYER_O)
-    data.SetNextTurn(4, uttt_data.PLAYER_O)
+    data.SetNextTurn(4, uttt_data.PLAYER_X)
     data.SetThisPlayer(uttt_data.PLAYER_X, "ME")
     data.SetOtherPlayer("YOU")
     uttt_pygame_main(data, None)
