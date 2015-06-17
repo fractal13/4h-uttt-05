@@ -37,20 +37,21 @@ class UTTTGame(PygameGame):
         self.font = pygame.font.SysFont("Deja Vu Sans Mono", 24)
         self.data = data
         self.send_queue = send_queue
+        self.board_top = 100
         
         self.blink_dir   = 1
         self.blink_value = 0
         self.blink_max   = frames_per_second
 
         # for piece movement
-        self.piece_location    = [ [ [0, 0, PIECE_START] for pos in range(9)] for bor in range(9) ]
+        self.piece_location    = [ [ [5, self.board_top+5, PIECE_START] for pos in range(9)] for bor in range(9) ]
         self.piece_destination = []
         w0 = self.width/3
-        h0 = self.height/3
+        h0 = (self.height-self.board_top)/3
         for board in range(9):
             dsts = []
             x0 = (board % 3) * w0
-            y0 = (board / 3) * h0
+            y0 = (board / 3) * h0 + self.board_top
             for position in range(9):
                 col = position % 3
                 row = position / 3
@@ -163,8 +164,11 @@ class UTTTGame(PygameGame):
                 return
 
             mX,mY = mouse_position[0], mouse_position[1]
+            if mY < self.board_top:
+                # not on board
+                return
             col = mX / (self.width/9)
-            row = mY / (self.height/9)
+            row = (mY-self.board_top) / ((self.height-self.board_top)/9)
             board = 3 * (row / 3) + (col / 3)
             position = 3 * (row % 3) + (col % 3)
 
@@ -185,9 +189,9 @@ class UTTTGame(PygameGame):
     def paint_board(self, surface, board):
         # size and coordinates of the board
         w0 = self.width/3
-        h0 = self.height/3
+        h0 = (self.height-self.board_top)/3
         x0 = (board % 3) * w0
-        y0 = (board / 3) * h0
+        y0 = (board / 3) * h0 + self.board_top
         
         # background/line/piece color
         outline_color = very_light_background
@@ -297,8 +301,8 @@ class UTTTGame(PygameGame):
                 opponent_color = very_light_player_x
                 opponent_extra = " * "
 
-        self.drawTextLeft(surface, player + " " + self.data.GetPlayerName() + player_extra , 30, 30, self.font, player_color)
-        self.drawTextLeft(surface, opponent + " " + self.data.GetOpponentName() + opponent_extra, 30, 60, self.font, opponent_color)
+        self.drawTextLeft(surface, player + " " + self.data.GetPlayerName() + player_extra, 30, 45, self.font, player_color)
+        self.drawTextLeft(surface, opponent + " " + self.data.GetOpponentName() + opponent_extra, 30, 75, self.font, opponent_color)
         return
         
     def paint(self, surface):
@@ -313,7 +317,7 @@ class UTTTGame(PygameGame):
 
         # Background
         rect = pygame.Rect(0,0,self.width,self.height)
-        surface.fill((0,0,0), rect)
+        surface.fill(light_background, rect)
         
         for board in range(9):
             self.paint_board(surface, board)
@@ -351,7 +355,7 @@ class UTTTGame(PygameGame):
 
 
 def uttt_pygame_main(data, send_queue):
-    game = UTTTGame(600, 600, 30, data, send_queue)
+    game = UTTTGame(600, 700, 30, data, send_queue)
     game.main_loop()
     return
 
