@@ -2,6 +2,7 @@ from uttt_data import *
 from pygame_game import PygameGame
 import pygame, pygame.locals
 import uttt_data
+import random
 
 # colors
 very_light_background = (231, 154, 175)
@@ -22,19 +23,53 @@ normal_player_o = (142, 163, 54)
 dark_player_o = (103, 123, 20)
 very_dark_player_o = (66, 82, 0)
 
+PIECE_START = 0
+PIECE_MOVE = 1
+PIECE_DONE = 2
+
+
 class UTTTGame(PygameGame):
 
     def __init__(self, width_px, height_px, frames_per_second, data, send_queue):
         # PygameGame sets self.width and self.height        
         PygameGame.__init__(self, "Ultimate Tic Tac Toe", width_px, height_px, frames_per_second)
         pygame.font.init()
-        self.font = pygame.font.SysFont("Courier New", 14)
+        self.font = pygame.font.SysFont("Deja Vu Sans Mono", 24)
         self.data = data
         self.send_queue = send_queue
         
         self.blink_dir   = 1
         self.blink_value = 0
         self.blink_max   = frames_per_second
+
+        # for piece movement
+        self.piece_location    = [ [ [0, 0, PIECE_START] for pos in range(9)] for bor in range(9) ]
+        self.piece_destination = []
+        w0 = self.width/3
+        h0 = self.height/3
+        for board in range(9):
+            dsts = []
+            x0 = (board % 3) * w0
+            y0 = (board / 3) * h0
+            for position in range(9):
+                col = position % 3
+                row = position / 3
+                x = x0 + int((col + .5) * w0/3)
+                y = y0 + int((row + .5) * h0/3)
+                dsts.append( (x, y) )
+            self.piece_destination.append(dsts)
+        
+        self.x_images = []
+        for i in range(4):
+            self.x_images.append( pygame.image.load("XPiece%d.png" % (i,)) )
+        self.x_image_i = 0
+        self.x_image_multiplier = 10
+
+        self.o_images = []
+        for i in range(12):
+            self.o_images.append( pygame.image.load("OPiece%d.png" % (i,)) )
+        self.o_image_i = 0
+        self.o_image_multiplier = 3
         return
 
     def handle_state(self):
@@ -87,8 +122,40 @@ class UTTTGame(PygameGame):
 
         return
 
+    def handle_moving_pieces(self):
+        for board in range(9):
+            for position in range(9):
+                if (self.piece_location[board][position][2] == PIECE_START and
+                    self.data.GetMarker(board, position) != uttt_data.PLAYER_N):
+                    self.piece_location[board][position][2] = PIECE_MOVE
+                if self.piece_location[board][position][2] == PIECE_MOVE:
+                    x0 = self.piece_location[board][position][0]
+                    y0 = self.piece_location[board][position][1]
+                    x1 = self.piece_destination[board][position][0]
+                    y1 = self.piece_destination[board][position][1]
+                    r = random.randrange(3) + 6
+                    if x0 < x1:
+                        self.piece_location[board][position][0] = x0 + r
+                        if self.piece_location[board][position][0] > x1:
+                            self.piece_location[board][position][0] = x1
+                    r = random.randrange(3) + 6
+                    if y0 < y1:
+                        self.piece_location[board][position][1] = y0 + r
+                        if self.piece_location[board][position][1] > y1:
+                            self.piece_location[board][position][1] = y1
+                    if x0 >= x1 and y0 >= y1:
+                        self.piece_location[board][position][2] = PIECE_DONE
+        return
+        
     def game_logic(self, keys, newkeys, buttons, newbuttons, mouse_position):
         self.handle_state()
+        self.handle_moving_pieces()
+        self.x_image_i += 1
+        if self.x_image_i >= len(self.x_images) * self.x_image_multiplier:
+            self.x_image_i = 0
+        self.o_image_i += 1
+        if self.o_image_i >= len(self.o_images) * self.o_image_multiplier:
+            self.o_image_i = 0
         
         if 1 in newbuttons:
             if self.data.GetNextPlayer() != self.data.GetPlayer():
@@ -102,7 +169,11 @@ class UTTTGame(PygameGame):
             position = 3 * (row % 3) + (col % 3)
 
             if self.data.GetNextBoard() != board and self.data.GetNextBoard() != uttt_data.BOARD_ANY:
-                # not correct place
+                # not correct board
+                return
+
+            if self.data.GetMarker(board, position) != uttt_data.PLAYER_N:
+                # empty position
                 return
             
             if self.data and self.send_queue:
@@ -178,40 +249,56 @@ class UTTTGame(PygameGame):
 
         # markers
         for position in range(9):
-            col = position % 3
-            row = position / 3
-            x = x0 + int((col + .5) * w0/3)
-            y = y0 + int((row + .5) * h0/3)
+            x = self.piece_location[board][position][0]
+            y = self.piece_location[board][position][1]
             marker = self.data.GetMarker(board, position)
             if marker == uttt_data.PLAYER_X:
-                pygame.draw.circle(surface, player_x_color, (x, y), 5)
+                if self.piece_location[board][position][2] == PIECE_MOVE:
+                    i = self.x_image_i/self.x_image_multiplier
+                else:
+                    i = 0
+                (ww, hh) = self.x_images[i].get_size()
+                surface.blit(self.x_images[i], (x-ww/2, y-hh/2))
+                #pygame.draw.circle(surface, player_x_color, (x, y), 5)
             elif marker == uttt_data.PLAYER_O:
-                pygame.draw.circle(surface, player_o_color, (x, y), 5)
+                if self.piece_location[board][position][2] == PIECE_MOVE:
+                    i = self.o_image_i/self.o_image_multiplier
+                else:
+                    i = 0
+                (ww, hh) = self.o_images[i].get_size()
+                surface.blit(self.o_images[i], (x-ww/2, y-hh/2))
+                #pygame.draw.circle(surface, player_o_color, (x, y), 5)
             
         return
 
     def paint_game_info(self, surface):
         my_turn = self.data.GetPlayer() == self.data.GetNextPlayer()
         player = self.data.GetPlayer()
+        player_extra = ""
+        opponent_extra = ""
         if player == uttt_data.PLAYER_X:
             opponent = uttt_data.PLAYER_O
             if my_turn:
                 player_color = very_light_player_x
                 opponent_color = normal_player_o
+                player_extra = " * "
             else:
                 player_color = normal_player_x
                 opponent_color = very_light_player_o
+                opponent_extra = " * "
         else:
             opponent = uttt_data.PLAYER_X
             if my_turn:
                 player_color = very_light_player_o
                 opponent_color = normal_player_x
+                player_extra = " * "
             else:
                 player_color = normal_player_o
                 opponent_color = very_light_player_x
-        
-        self.drawTextLeft(surface, player + " " + self.data.GetPlayerName(), 30, 30, self.font, player_color)
-        self.drawTextLeft(surface, opponent + " " + self.data.GetOpponentName(), 30, 50, self.font, opponent_color)
+                opponent_extra = " * "
+
+        self.drawTextLeft(surface, player + " " + self.data.GetPlayerName() + player_extra , 30, 30, self.font, player_color)
+        self.drawTextLeft(surface, opponent + " " + self.data.GetOpponentName() + opponent_extra, 30, 60, self.font, opponent_color)
         return
         
     def paint(self, surface):
@@ -269,4 +356,11 @@ def uttt_pygame_main(data, send_queue):
     return
 
 if __name__ == "__main__":
-    uttt_pygame_main(UTTTData(), None)
+    data = UTTTData()
+    data.SetState(uttt_data.STATE_SHOW_GAME)
+    data.SetBoardMarker(6, 8, uttt_data.PLAYER_X)
+    data.SetBoardMarker(8, 2, uttt_data.PLAYER_O)
+    data.SetNextTurn(4, uttt_data.PLAYER_O)
+    data.SetThisPlayer(uttt_data.PLAYER_X, "ME")
+    data.SetOtherPlayer("YOU")
+    uttt_pygame_main(data, None)
