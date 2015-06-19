@@ -1,4 +1,5 @@
 import uttt_data
+import Queue
 
 class Board:
     def __init__(self, data):
@@ -58,6 +59,7 @@ class Board:
         
         
     def Evaluate(self):
+        GAME_WIN_SCORE = 100000
         BOARD_CORNER_SCORE = 60
         BOARD_CENTER_SCORE = 100
         BOARD_EDGE_SCORE = 30
@@ -69,20 +71,21 @@ class Board:
         score = 0
         if self.winner != uttt_data.PLAYER_N:
             if self.winner == self.this_player:
-                score += 100000
+                score += GAME_WIN_SCORE
             elif self.winner == self.other_player:
-                score -= 100000
-        for board in range(9):
-            if self.board_owners[board] == self.this_player:
-                score += self.PositionScore(board, BOARD_SCORES)
-            elif self.board_owners[board] == self.other_player:
-                score -= self.PositionScore(board, BOARD_SCORES)
-            else:
-                for position in range(9):
-                    if self.markers[board][position] == self.this_player:
-                        score += self.PositionScore(position, POSITION_SCORES)
-                    elif self.markers[board][position] == self.other_player:
-                        score -= self.PositionScore(position, POSITION_SCORES)
+                score -= GAME_WIN_SCORE
+        else:
+            for board in range(9):
+                if self.board_owners[board] == self.this_player:
+                    score += self.PositionScore(board, BOARD_SCORES)
+                elif self.board_owners[board] == self.other_player:
+                    score -= self.PositionScore(board, BOARD_SCORES)
+                else:
+                    for position in range(9):
+                        if self.markers[board][position] == self.this_player:
+                            score += self.PositionScore(position, POSITION_SCORES)
+                        elif self.markers[board][position] == self.other_player:
+                            score -= self.PositionScore(position, POSITION_SCORES)
         return score
                     
                     
@@ -115,8 +118,10 @@ class Board:
 
 class UTTTAI:
 
-    def __init__(self, data):
+    def __init__(self, data, ai_send_queue, ai_recv_queue):
         self.data = data
+        self.ai_send_queue = ai_send_queue
+        self.ai_recv_queue = ai_recv_queue
         return
 
     def ChooseMove(self, depth):
@@ -163,5 +168,23 @@ class UTTTAI:
             if alpha >= beta:
                 break
         return (min_move, min_value)
+
+    def main_loop(self):
+        while not (self.data.GetState() in [ uttt_data.STATE_SOCKET_CLOSED, uttt_data.STATE_SOCKET_ERROR,
+                                             uttt_data.STATE_ERROR, uttt_data.STATE_GAME_OVER ]):
+            try:
+                depth = self.ai_send_queue.get(True, 1)
+                print "AI: ChooseMove(%d)" % (depth, )
+                self.ai_recv_queue.put( self.ChooseMove(depth) )
+                print "AI: put to queue"
+            except Queue.Empty as e:
+                # not ready yet, fine
+                pass
+        return
             
             
+
+def uttt_ai_main(data, ai_send_queue, ai_recv_queue):
+    ai = UTTTAI(data, ai_send_queue, ai_recv_queue)
+    ai.main_loop()
+    return

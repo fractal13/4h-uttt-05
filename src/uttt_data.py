@@ -76,7 +76,14 @@ class UTTTData:
     def SetState(self, state):
         self.state = state
         return True
-        
+
+    def GetMarkerCount(self):
+        count = 0
+        for board in range(9):
+            for position in range(9):
+                if self.board[board][position] in [ PLAYER_X, PLAYER_O ]:
+                    count += 1
+        return count
     def GetMarker(self, board, position):
         if self.LegalBoardIndex(board) and self.LegalPositionIndex(board, position):
             return self.board[board][position]
@@ -200,10 +207,12 @@ class UTTTData:
         if self.state == STATE_WAIT_LOGIN:
             if valid:
                 self.state = STATE_WAIT_GAME
+                self.logged_in = True
             else:
                 self.state = STATE_LOGIN_FAIL
                 self.login_name = ""
                 self.login_password = ""
+                self.logged_in = False
             print "CurrentState:", self.state
             return True
         return False

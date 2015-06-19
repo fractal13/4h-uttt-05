@@ -98,8 +98,9 @@ def uttt_send_queue_loop(ws):
         # block for 1 second intervals, to allow for shutdown.
         try:
             text = ws.send_queue.get(True, 1)
-            print "uttt_send_queue_loop: send:", text
-            ws.send(text)
+            if text:
+                print "uttt_send_queue_loop: send:", text
+                ws.send(text)
         except Queue.Empty as e:
             #print "uttt_send_queue_loop: no data:", ws.keep_running, ws.sock
             pass

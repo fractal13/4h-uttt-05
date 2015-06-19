@@ -4,6 +4,7 @@ import pygame, pygame.locals
 import uttt_data
 import random
 import uttt_ai
+import Queue
 
 # colors
 very_light_background = (231, 154, 175)
@@ -31,13 +32,16 @@ PIECE_DONE = 2
 
 class UTTTGame(PygameGame):
 
-    def __init__(self, width_px, height_px, frames_per_second, data, send_queue):
+    def __init__(self, width_px, height_px, frames_per_second, data, send_queue, do_ai, ai_level, ai_send_queue, ai_recv_queue):
         # PygameGame sets self.width and self.height        
         PygameGame.__init__(self, "Ultimate Tic Tac Toe", width_px, height_px, frames_per_second)
         pygame.font.init()
         self.font = pygame.font.SysFont("Deja Vu Sans Mono", 24)
         self.data = data
         self.send_queue = send_queue
+        self.ai_send_queue = ai_send_queue
+        self.ai_recv_queue = ai_recv_queue
+        self.waiting_for_ai = False
         self.board_top = 100
         
         self.blink_dir   = 1
@@ -73,7 +77,9 @@ class UTTTGame(PygameGame):
         self.o_image_i = 0
         self.o_image_multiplier = 3
 
-        self.search_depth = 3
+        self.ai_mode = do_ai
+        self.ai_count = self.data.GetMarkerCount() - 1
+        self.search_depth = ai_level
 
         self.game_over = False
         return
@@ -118,8 +124,9 @@ class UTTTGame(PygameGame):
                             uttt_data.STATE_ERROR, uttt_data.STATE_GAME_OVER ]:
                 # close
                 self.game_over = True
-                #print "Socket closed, or other error, pygame will quit."
-                #pygame.quit()
+                if self.ai_mode:
+                    print "Socket closed, or other error, pygame will quit."
+                    pygame.quit()
             elif state in [ uttt_data.STATE_SOCKET_OPEN ]:
                 # what should I do?
                 pass
@@ -152,6 +159,81 @@ class UTTTGame(PygameGame):
                     if x0 >= x1 and y0 >= y1:
                         self.piece_location[board][position][2] = PIECE_DONE
         return
+
+    def send_turn_if_legal(self, board, position):
+        # Legal values for board, position?
+        if board < 0 or board > 8 or position < 0 or position > 8:
+            print "Bad board=%d or position=%d" % (int(board), int(position))
+            return False
+        # Game on, and not waiting for an update?
+        if self.data.GetState() != uttt_data.STATE_SHOW_GAME:
+            print "Bad state=%d" % (int(self.data.GetState()), )
+            return False
+        # Our turn?
+        if self.data.GetNextPlayer() != self.data.GetPlayer():
+            print "Bad turn next_player=%s != player=%s" % (str(self.data.GetNextPlayer()),
+                                                            str(self.data.GetPlayer()))
+            return False
+        # Legal board?
+        if self.data.GetNextBoard() != board and self.data.GetNextBoard() != uttt_data.BOARD_ANY:
+            print "Bad next_board next_board=%d != board=%d" % (int(self.data.GetNextBoard()), int(board))
+            return False
+        # Board not won?
+        if self.data.GetBoardOwner(board) != uttt_data.PLAYER_N:
+            print "Bad board_owner(board=%d)=%s" % (int(board), str(self.data.GetBoardOwner(board)))
+            return False
+        # Position empty?
+        if self.data.GetMarker(board, position) != uttt_data.PLAYER_N:
+            print "Bad marker(board=%d, position=%d)=%s" % (int(board), int(position),
+                                                            str(self.data.GetMarker(board, position)))
+            return False
+        # Data connection and queue open?
+        if (not self.data) or (not self.send_queue):
+            print "Bad data=%s or send_queue=%s" % (str(self.data), str(self.send_queue))
+            return False
+        # OK, send it
+        text = self.data.SendTurn(board, position)
+        print "pygame: queuing: %s" % (text, )
+        self.send_queue.put(text)
+        return True
+
+    def screen_position_to_board_and_position(self, mouse_position):
+        board, position = -1, -1
+        mX,mY = mouse_position[0], mouse_position[1]
+        if mY < self.board_top:
+            return (board, position)
+        col = mX / (self.width/9)
+        row = (mY - self.board_top) / ((self.height - self.board_top) / 9)
+        board = 3 * (row / 3) + (col / 3)
+        position = 3 * (row % 3) + (col % 3)
+        
+        return (board, position)
+
+    def start_ai_think(self):
+        if not self.waiting_for_ai:
+            print "PG->AI: Ask for (depth=%d)" % (self.search_depth, )
+            self.ai_send_queue.put(self.search_depth)
+            print "PG->AI: put to queue."
+            self.waiting_for_ai = True
+            return True
+        return False
+        
+    def play_ai_move(self):
+        if self.waiting_for_ai:
+            try:
+                move = self.ai_recv_queue.get(False)
+                print "PG<-AI: recv from queue (%s)." % (move, )
+                self.waiting_for_ai = False
+                board, position = move
+                if self.send_turn_if_legal(board, position):
+                    self.ai_count = self.data.GetMarkerCount()
+                    return True
+                else:
+                    print "AI gave bad move:", str(move)
+            except Queue.Empty as e:
+                # not ready yet, fine
+                pass
+        return False
         
     def game_logic(self, keys, newkeys, buttons, newbuttons, mouse_position):
         self.handle_state()
@@ -172,56 +254,27 @@ class UTTTGame(PygameGame):
             self.search_depth -= 1
             if self.search_depth < 1:
                 self.search_depth = 1
+
+        if self.play_ai_move():
+            return
             
+        if self.ai_mode:
+            if self.data.GetNextPlayer() == self.data.GetPlayer() and self.data.GetNextPlayer() != uttt_data.PLAYER_N:
+                if self.data.GetMarkerCount() > self.ai_count:
+                    if self.start_ai_think():
+                        return
+
         if pygame.K_a in newkeys:
-            if self.data.GetNextPlayer() != self.data.GetPlayer():
-                # not our turn
-                return
-            
-            ai = uttt_ai.UTTTAI(self.data)
-            move = ai.ChooseMove(self.search_depth)
-            board, position = move
-            
-            if self.data.GetNextBoard() != board and self.data.GetNextBoard() != uttt_data.BOARD_ANY:
-                # not correct board
-                return
-
-            if self.data.GetMarker(board, position) != uttt_data.PLAYER_N:
-                # empty position
-                return
-
-            if self.data and self.send_queue:
-                text = self.data.SendTurn(board, position)
-                print "pygame: queuing: %s" % (text, )
-                self.send_queue.put(text)
-                return
+            if self.data.GetNextPlayer() == self.data.GetPlayer() and self.data.GetNextPlayer() != uttt_data.PLAYER_N:
+                if self.start_ai_think():
+                    return
             
         if 1 in newbuttons:
-            if self.data.GetNextPlayer() != self.data.GetPlayer():
-                # not our turn
-                return
-
-            mX,mY = mouse_position[0], mouse_position[1]
-            if mY < self.board_top:
-                # not on board
-                return
-            col = mX / (self.width/9)
-            row = (mY-self.board_top) / ((self.height-self.board_top)/9)
-            board = 3 * (row / 3) + (col / 3)
-            position = 3 * (row % 3) + (col % 3)
-
-            if self.data.GetNextBoard() != board and self.data.GetNextBoard() != uttt_data.BOARD_ANY:
-                # not correct board
-                return
-
-            if self.data.GetMarker(board, position) != uttt_data.PLAYER_N:
-                # empty position
-                return
-            
-            if self.data and self.send_queue:
-                text = self.data.SendTurn(board, position)
-                print "pygame: queuing: %s" % (text, )
-                self.send_queue.put(text)
+            if self.data.GetNextPlayer() == self.data.GetPlayer() and self.data.GetNextPlayer() != uttt_data.PLAYER_N:
+                (board, position) = self.screen_position_to_board_and_position(mouse_position)
+                if self.send_turn_if_legal(board, position):
+                    return
+                    
         return
 
     def paint_board(self, surface, board):
@@ -354,6 +407,8 @@ class UTTTGame(PygameGame):
             self.drawTextRight(surface, winner_str, self.width-30, 45, self.font, player_color)
         else:
             self.drawTextRight(surface, "Search depth: " + str(self.search_depth), self.width-30, 45, self.font, player_color)
+            if self.waiting_for_ai:
+                self.drawTextRight(surface, "Thinking...", self.width-30, 75, self.font, player_color)
         return
         
     def paint(self, surface):
@@ -405,8 +460,8 @@ class UTTTGame(PygameGame):
         return
 
 
-def uttt_pygame_main(data, send_queue):
-    game = UTTTGame(600, 700, 30, data, send_queue)
+def uttt_pygame_main(data, send_queue, do_ai, ai_level, ai_send_queue, ai_recv_queue):
+    game = UTTTGame(600, 700, 30, data, send_queue, do_ai, ai_level, ai_send_queue, ai_recv_queue)
     game.main_loop()
     return
 
@@ -418,4 +473,4 @@ if __name__ == "__main__":
     data.SetNextTurn(4, uttt_data.PLAYER_X)
     data.SetThisPlayer(uttt_data.PLAYER_X, "ME")
     data.SetOtherPlayer("YOU")
-    uttt_pygame_main(data, None)
+    uttt_pygame_main(data, None, False, 5, None, None)
