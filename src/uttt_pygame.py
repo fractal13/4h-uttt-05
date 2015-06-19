@@ -432,6 +432,16 @@ class UTTTGame(PygameGame):
         
         return
 
+    # Draws a transparent rectangle
+    # note that color should have an alpha channel (4th element)
+    def drawTransparentRect(self, surface, color, rect):
+        rect_surface = pygame.Surface( (rect.width, rect.height), pygame.locals.SRCALPHA )
+        rect_surface.fill( (0,0,0,0) )
+        r = pygame.Rect(0, 0, rect.width, rect.height)
+        pygame.draw.rect(rect_surface, color, r)
+        surface.blit(rect_surface, (rect.left, rect.top))
+        return
+
     # Draws text left justified at "x".
     # The bottom of the text is displayed at "y".
     def drawTextLeft(self, surface, text, x, y, font, color):
