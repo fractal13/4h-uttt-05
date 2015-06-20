@@ -3,6 +3,7 @@ import uttt_data, uttt_messages
 import threading
 import Queue
 
+g_debug = False
 
 class UTTTWebSocketApp(websocket.WebSocketApp):
 
@@ -60,11 +61,14 @@ class UTTTWebSocketApp(websocket.WebSocketApp):
 
 
 def uttt_websocket_on_message(ws, message):
-    print "received text: %s" % (message, )
+    if g_debug:
+        print "received text: %s" % (message, )
     msg = uttt_messages.Deserialize(message)
-    print "translated to msg: %s" % (str(msg), )
+    if g_debug:
+        print "translated to msg: %s" % (str(msg), )
     ws.uttt_data.HandleMessage(msg)
-    print "Handled message."
+    if g_debug:
+        print "Handled message."
     return
 
 def uttt_websocket_on_error(ws, error):
