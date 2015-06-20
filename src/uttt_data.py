@@ -29,6 +29,8 @@ STATE_SOCKET_ERROR = 17
 STATE_SOCKET_OPEN = 18
 STATE_SIGNUP_OK = 19
 
+g_debug = False
+
 class UTTTData:
 
     def __init__(self):
@@ -135,7 +137,7 @@ class UTTTData:
         if (board == BOARD_ANY or self.LegalBoardIndex(board)) and player in LEGAL_MARKERS:
             self.next_player = player
             self.next_board = board
-            self.state = STATE_SHOW_GAME
+            self.state = STATE_WAIT_GAME  # waiting for update finished message
             return True
         return False
 
@@ -263,6 +265,11 @@ class UTTTData:
         self.other_name = player_name
         return True
 
+    def SetUpdateFinished(self):
+        if self.state == STATE_WAIT_GAME or self.state == STATE_WAIT_TURN:
+            self.state = STATE_SHOW_GAME
+        return True
+
     def HandleMessage(self, msg):
         typeName = msg.GetTypeName()
         retmsg = ""
@@ -273,33 +280,46 @@ class UTTTData:
             print "Received Pong"
         elif typeName == uttt_messages.BoardStateMsg.GTypeName:
             self.SetBoardOwner(msg.GetBoard(), msg.GetPlayer())
-            print "Received BoardState"
+            if g_debug:
+                print "Received BoardState"
         elif typeName == uttt_messages.MarkerMsg.GTypeName:
             self.SetBoardMarker(msg.GetBoard(), msg.GetPosition(), msg.GetPlayer())
-            print "Received Marker"
+            if g_debug:
+                print "Received Marker"
         elif typeName == uttt_messages.NextTurnMsg.GTypeName:
             self.SetNextTurn(msg.GetBoard(), msg.GetPlayer())
-            print "Received NextTurn"
+            if g_debug:
+                print "Received NextTurn"
         elif typeName == uttt_messages.WinStateMsg.GTypeName:
             self.SetWinner(msg.GetPlayer())
-            print "Received WinState"
+            if g_debug:
+                print "Received WinState"
         elif typeName == uttt_messages.YouAreMsg.GTypeName:
             self.SetThisPlayer(msg.GetPlayer(), msg.GetPlayerName())
-            print "Received YouAre"
+            if g_debug:
+                print "Received YouAre"
         elif typeName == uttt_messages.TurnFailedMsg.GTypeName:
             self.SetTurnFailed()
-            print "Received TurnFailed"
+            if g_debug:
+                print "Received TurnFailed"
         elif typeName == uttt_messages.LoginReplyMsg.GTypeName:
             self.SetLoginStatus(msg.GetValid())
-            print "Received LoginReply"
+            if g_debug:
+                print "Received LoginReply"
         elif typeName == uttt_messages.SignUpReplyMsg.GTypeName:
             self.SetSignupStatus(msg.GetUsernameValid(), msg.GetEmailValid(), msg.GetPasswordState())
-            print "Received SignUpReply"
+            if g_debug:
+                print "Received SignUpReply"
         elif typeName == uttt_messages.OpponentNameMsg.GTypeName:
             self.SetOtherPlayer(msg.GetPlayerName())
-            print "Received OpponentName"
+            if g_debug:
+                print "Received OpponentName"
+        elif typeName == uttt_messages.UpdateFinishedMsg.GTypeName:
+            self.SetUpdateFinished()
+            if g_debug:
+                print "Received UpdateFinished"
         else:
             print "Unknown Message Type:", typeName, str(msg)
 
-        self.Display()
+        #self.Display()
         return retmsg
