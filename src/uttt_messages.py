@@ -453,6 +453,14 @@ class OpponentNameMsg(IMsg):
     def __str__(self):
         return "%s %s" % (str(self.name), ReplaceSpaces(str(self.player_name)))
         
+class UpdateFinishedMsg(IMsg):
+
+    GTypeName = "updatefinished"
+    
+    def __init__(self):
+        IMsg.__init__(self, self.GTypeName)
+        return
+
         
 class ErrorMsg(IMsg):
     
@@ -531,6 +539,8 @@ def Deserialize(string):
         msg = SignUpReplyMsg()
     elif typeName == OpponentNameMsg.GTypeName:
         msg = OpponentNameMsg()
+    elif typeName == UpdateFinishedMsg.GTypeName:
+        msg = UpdateFinishedMsg()
     else:
         msg = ErrorMsg("Unknown message type name (%s)." % (typeName,))
         
