@@ -160,6 +160,20 @@ class UTTTGame(PygameGame):
                         self.piece_location[board][position][2] = PIECE_DONE
         return
 
+    def is_my_turn(self):
+        next_player = self.data.GetNextPlayer()
+        player = self.data.GetPlayer()
+        return next_player == player and next_player != uttt_data.PLAYER_N
+        
+    def is_your_turn(self):
+        next_player = self.data.GetNextPlayer()
+        player = self.data.GetPlayer()
+        return next_player != player and next_player != uttt_data.PLAYER_N
+
+    def is_board_next(self, board):
+        next_board = self.data.GetNextBoard()
+        return next_board == board or next_board == uttt_data.BOARD_ANY
+        
     def send_turn_if_legal(self, board, position):
         # Legal values for board, position?
         if board < 0 or board > 8 or position < 0 or position > 8:
@@ -170,12 +184,12 @@ class UTTTGame(PygameGame):
             print "Bad state=%d" % (int(self.data.GetState()), )
             return False
         # Our turn?
-        if self.data.GetNextPlayer() != self.data.GetPlayer():
+        if not self.is_my_turn():
             print "Bad turn next_player=%s != player=%s" % (str(self.data.GetNextPlayer()),
                                                             str(self.data.GetPlayer()))
             return False
         # Legal board?
-        if self.data.GetNextBoard() != board and self.data.GetNextBoard() != uttt_data.BOARD_ANY:
+        if not self.is_board_next(board):
             print "Bad next_board next_board=%d != board=%d" % (int(self.data.GetNextBoard()), int(board))
             return False
         # Board not won?
@@ -210,7 +224,7 @@ class UTTTGame(PygameGame):
         return (board, position)
 
     def start_ai_think(self):
-        if not self.waiting_for_ai:
+        if (not self.waiting_for_ai) and (self.data.GetState() == uttt_data.STATE_SHOW_GAME):
             print "PG->AI: Ask for (depth=%d)" % (self.search_depth, )
             self.ai_send_queue.put(self.search_depth)
             print "PG->AI: put to queue."
@@ -223,13 +237,14 @@ class UTTTGame(PygameGame):
             try:
                 move = self.ai_recv_queue.get(False)
                 print "PG<-AI: recv from queue (%s)." % (move, )
-                self.waiting_for_ai = False
-                board, position = move
-                if self.send_turn_if_legal(board, position):
-                    self.ai_count = self.data.GetMarkerCount()
-                    return True
-                else:
-                    print "AI gave bad move:", str(move)
+                if move:
+                    self.waiting_for_ai = False
+                    board, position = move
+                    if self.send_turn_if_legal(board, position):
+                        self.ai_count = self.data.GetMarkerCount()
+                        return True
+                    else:
+                        print "AI gave bad move:", str(move)
             except Queue.Empty as e:
                 # not ready yet, fine
                 pass
@@ -259,18 +274,18 @@ class UTTTGame(PygameGame):
             return
             
         if self.ai_mode:
-            if self.data.GetNextPlayer() == self.data.GetPlayer() and self.data.GetNextPlayer() != uttt_data.PLAYER_N:
+            if self.is_my_turn():
                 if self.data.GetMarkerCount() > self.ai_count:
                     if self.start_ai_think():
                         return
 
         if pygame.K_a in newkeys:
-            if self.data.GetNextPlayer() == self.data.GetPlayer() and self.data.GetNextPlayer() != uttt_data.PLAYER_N:
+            if self.is_my_turn():
                 if self.start_ai_think():
                     return
             
         if 1 in newbuttons:
-            if self.data.GetNextPlayer() == self.data.GetPlayer() and self.data.GetNextPlayer() != uttt_data.PLAYER_N:
+            if self.is_my_turn():
                 (board, position) = self.screen_position_to_board_and_position(mouse_position)
                 if self.send_turn_if_legal(board, position):
                     return
@@ -286,9 +301,10 @@ class UTTTGame(PygameGame):
         
         # background/line/piece color
         outline_color = very_light_background
-        if self.data.GetBoardOwner(board) == uttt_data.PLAYER_N:
-            if (self.data.GetNextPlayer() == self.data.GetPlayer() and
-                (self.data.GetNextBoard() == uttt_data.BOARD_ANY or self.data.GetNextBoard() == board)):
+        board_owner = self.data.GetBoardOwner(board)
+        if board_owner == uttt_data.PLAYER_N:
+            board_is_next = self.is_board_next(board)
+            if board_is_next and self.is_my_turn():
                 blink_percent = float(self.blink_value)/self.blink_max
                 background_color = []
                 for i in range(3):
@@ -298,18 +314,28 @@ class UTTTGame(PygameGame):
                 line_color = very_dark_background
                 player_x_color = normal_player_x
                 player_o_color = normal_player_o
+            elif board_is_next and self.is_your_turn():
+                blink_percent = float(self.blink_value)/self.blink_max
+                background_color = []
+                for i in range(3):
+                    background_color.append(int(blink_percent*(normal_background[i] - very_dark_background[i])) + very_dark_background[i])
+
+                # dark background where you can play, if it's your turn
+                line_color = very_light_background
+                player_x_color = normal_player_x
+                player_o_color = normal_player_o
             else:
                 # normal background where I can't play
                 background_color = normal_background
                 line_color = very_dark_background
                 player_x_color = normal_player_x
                 player_o_color = normal_player_o
-        elif self.data.GetBoardOwner(board) == uttt_data.PLAYER_X:
+        elif board_owner == uttt_data.PLAYER_X:
             background_color = light_player_x
             line_color = very_dark_player_x
             player_x_color = dark_player_x
             player_o_color = very_light_player_o
-        elif self.data.GetBoardOwner(board) == uttt_data.PLAYER_O:
+        elif board_owner == uttt_data.PLAYER_O:
             background_color = light_player_o
             line_color = very_dark_player_o
             player_x_color = very_light_player_x
@@ -367,7 +393,8 @@ class UTTTGame(PygameGame):
         return
 
     def paint_game_info(self, surface):
-        my_turn = self.data.GetPlayer() == self.data.GetNextPlayer()
+        my_turn = self.is_my_turn()
+        your_turn = self.is_your_turn()
         player = self.data.GetPlayer()
         player_extra = ""
         opponent_extra = ""
@@ -377,20 +404,26 @@ class UTTTGame(PygameGame):
                 player_color = very_light_player_x
                 opponent_color = normal_player_o
                 player_extra = " * "
-            else:
+            elif your_turn:
                 player_color = normal_player_x
                 opponent_color = very_light_player_o
                 opponent_extra = " * "
+            else:
+                player_color = normal_player_x
+                opponent_color = normal_player_o
         else:
             opponent = uttt_data.PLAYER_X
             if my_turn:
                 player_color = very_light_player_o
                 opponent_color = normal_player_x
                 player_extra = " * "
-            else:
+            elif your_turn:
                 player_color = normal_player_o
                 opponent_color = very_light_player_x
                 opponent_extra = " * "
+            else:
+                player_color = normal_player_o
+                opponent_color = normal_player_x
 
         self.drawTextLeft(surface, player + " " + self.data.GetPlayerName() + player_extra, 30, 45, self.font, player_color)
         self.drawTextLeft(surface, opponent + " " + self.data.GetOpponentName() + opponent_extra, 30, 75, self.font, opponent_color)
