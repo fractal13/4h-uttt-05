@@ -125,6 +125,7 @@ def main():
     if x:
         x.join()
         print "ai joined."
+    data.Display()
     return
 
 if __name__ == "__main__":
